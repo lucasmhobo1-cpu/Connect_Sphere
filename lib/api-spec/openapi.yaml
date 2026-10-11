@@ -3,13 +3,18 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Public Connect Sphere catalogue, release, support, and account APIs
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: products
+  - name: articles
+  - name: releases
+  - name: support
+  - name: account
+  - name: admin
 paths:
   /healthz:
     get:
@@ -24,13 +29,368 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List published products
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [daw, instruments, eq, compressors, reverb-delay, saturation, synthesizers, audio-tools]
+      responses:
+        "200":
+          description: Matching products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+  /products/{slug}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get a product by slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "404": { description: Product not found }
+  /admin/products:
+    get:
+      operationId: listAdminProducts
+      tags: [admin]
+      summary: List all products for an administrator
+      description: Requires a signed-in Connect Sphere administrator.
+      responses:
+        "200":
+          description: All products with publication state
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminProduct" }
+        "401": { description: Authentication required }
+        "403": { description: Administrator role required }
+  /admin/products/{id}:
+    patch:
+      operationId: updateAdminProduct
+      tags: [admin]
+      summary: Update product pricing and publication state
+      description: Requires a signed-in Connect Sphere administrator. This does not process payment.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminProductUpdate" }
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProduct" }
+        "400": { description: Invalid update }
+        "401": { description: Authentication required }
+        "403": { description: Administrator role required }
+        "404": { description: Product not found }
+  /articles:
+    get:
+      operationId: listArticles
+      tags: [articles]
+      summary: List published news and learning articles
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [news, updates, tutorials, getting-started, beat-making, recording, mixing, mastering, documentation]
+      responses:
+        "200":
+          description: Matching articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Article" }
+  /articles/{slug}:
+    get:
+      operationId: getArticle
+      tags: [articles]
+      summary: Get an article by slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Article
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Article" }
+        "404": { description: Article not found }
+  /releases:
+    get:
+      operationId: listReleases
+      tags: [releases]
+      summary: List announced product releases
+      parameters:
+        - in: query
+          name: productSlug
+          schema: { type: string }
+      responses:
+        "200":
+          description: Releases, including explicit availability state
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Release" }
+  /releases/{id}/download:
+    get:
+      operationId: downloadRelease
+      tags: [releases]
+      summary: Download an available release
+      description: Returns a redirect only when a real release file has been configured. Signed-in downloads are recorded in account history.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "302": { description: Redirects to the configured release file }
+        "404": { description: Release or release file is not available }
+  /support-requests:
+    post:
+      operationId: createSupportRequest
+      tags: [support]
+      summary: Submit a support request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupportRequestInput" }
+      responses:
+        "201":
+          description: Request saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportRequestCreated" }
+        "400": { description: Invalid request }
+  /newsletter-subscriptions:
+    post:
+      operationId: subscribeNewsletter
+      tags: [support]
+      summary: Save a newsletter subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewsletterSubscriptionInput" }
+      responses:
+        "201":
+          description: Subscription saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewsletterSubscriptionCreated" }
+        "400": { description: Invalid email address }
+  /account:
+    get:
+      operationId: getAccountOverview
+      tags: [account]
+      summary: Get the signed-in user's Connect Sphere account overview
+      responses:
+        "200":
+          description: Account overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountOverview" }
+        "401": { description: Authentication required }
 components:
   schemas:
     HealthStatus:
       type: object
       properties:
-        status:
+        status: { type: string }
+      required: [status]
+    Product:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        shortDescription: { type: string }
+        description: { type: string }
+        category:
           type: string
-      required:
-        - status
-
+          enum: [daw, instruments, eq, compressors, reverb-delay, saturation, synthesizers, audio-tools]
+        kind: { type: string, enum: [daw, plugin, tool] }
+        priceCents: { type: [integer, "null"] }
+        currency: { type: string }
+        status: { type: string, enum: [coming_soon, available, discontinued] }
+        version: { type: [string, "null"] }
+        featureTags:
+          type: array
+          items: { type: string }
+        coverImageUrl: { type: [string, "null"] }
+      required: [id, slug, name, shortDescription, description, category, kind, priceCents, currency, status, version, featureTags, coverImageUrl]
+    AdminProduct:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        shortDescription: { type: string }
+        description: { type: string }
+        category: { type: string }
+        kind: { type: string }
+        priceCents: { type: [integer, "null"], minimum: 0 }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        status: { type: string, enum: [coming_soon, available, discontinued] }
+        version: { type: [string, "null"] }
+        featureTags:
+          type: array
+          items: { type: string }
+        coverImageUrl: { type: [string, "null"] }
+        isPublished: { type: boolean }
+      required: [id, slug, name, shortDescription, description, category, kind, priceCents, currency, status, version, featureTags, coverImageUrl, isPublished]
+    AdminProductUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        priceCents: { type: [integer, "null"], minimum: 0 }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        status: { type: string, enum: [coming_soon, available, discontinued] }
+        isPublished: { type: boolean }
+    Article:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        content: { type: string }
+        category:
+          type: string
+          enum: [news, updates, tutorials, getting-started, beat-making, recording, mixing, mastering, documentation]
+        publishedAt: { type: string, format: date-time }
+        coverImageUrl: { type: [string, "null"] }
+      required: [id, slug, title, summary, content, category, publishedAt, coverImageUrl]
+    Release:
+      type: object
+      properties:
+        id: { type: integer }
+        productSlug: { type: string }
+        productName: { type: string }
+        version: { type: string }
+        platform: { type: string }
+        releaseNotes: { type: string }
+        systemRequirements: { type: string }
+        fileSizeBytes: { type: [integer, "null"] }
+        publishedAt: { type: string, format: date-time }
+        downloadAvailable: { type: boolean }
+        downloadUrl: { type: [string, "null"] }
+      required: [id, productSlug, productName, version, platform, releaseNotes, systemRequirements, fileSizeBytes, publishedAt, downloadAvailable, downloadUrl]
+    SupportRequestInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+        category:
+          type: string
+          enum: [product, downloads, account-license, billing, other]
+        subject: { type: string, minLength: 3, maxLength: 160 }
+        message: { type: string, minLength: 10, maxLength: 5000 }
+      required: [name, email, category, subject, message]
+    SupportRequestCreated:
+      type: object
+      properties:
+        id: { type: integer }
+        status: { type: string, enum: [open] }
+        message: { type: string }
+      required: [id, status, message]
+    NewsletterSubscriptionInput:
+      type: object
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+      required: [email]
+    NewsletterSubscriptionCreated:
+      type: object
+      properties:
+        subscribed: { type: boolean }
+        message: { type: string }
+      required: [subscribed, message]
+    AccountProfile:
+      type: object
+      properties:
+        email: { type: [string, "null"] }
+        displayName: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [email, displayName, createdAt]
+    AccountProduct:
+      type: object
+      properties:
+        name: { type: string }
+        slug: { type: string }
+      required: [name, slug]
+    AccountLicense:
+      type: object
+      properties:
+        productName: { type: string }
+        status: { type: string }
+        issuedAt: { type: string, format: date-time }
+      required: [productName, status, issuedAt]
+    AccountOrder:
+      type: object
+      properties:
+        orderNumber: { type: string }
+        amountCents: { type: integer }
+        currency: { type: string }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [orderNumber, amountCents, currency, status, createdAt]
+    AccountDownload:
+      type: object
+      properties:
+        productName: { type: string }
+        version: { type: string }
+        downloadedAt: { type: string, format: date-time }
+      required: [productName, version, downloadedAt]
+    AccountOverview:
+      type: object
+      properties:
+        isAdmin: { type: boolean }
+        profile: { $ref: "#/components/schemas/AccountProfile" }
+        registeredProducts:
+          type: array
+          items: { $ref: "#/components/schemas/AccountProduct" }
+        licenses:
+          type: array
+          items: { $ref: "#/components/schemas/AccountLicense" }
+        purchaseHistory:
+          type: array
+          items: { $ref: "#/components/schemas/AccountOrder" }
+        downloadHistory:
+          type: array
+          items: { $ref: "#/components/schemas/AccountDownload" }
+      required: [isAdmin, profile, registeredProducts, licenses, purchaseHistory, downloadHistory]
