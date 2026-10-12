@@ -114,6 +114,82 @@ export interface AdminProductUpdate {
   isPublished?: boolean;
 }
 
+export type AdminProductInputCategory = typeof AdminProductInputCategory[keyof typeof AdminProductInputCategory];
+
+
+export const AdminProductInputCategory = {
+  daw: 'daw',
+  instruments: 'instruments',
+  eq: 'eq',
+  compressors: 'compressors',
+  'reverb-delay': 'reverb-delay',
+  saturation: 'saturation',
+  synthesizers: 'synthesizers',
+  'audio-tools': 'audio-tools',
+} as const;
+
+export type AdminProductInputKind = typeof AdminProductInputKind[keyof typeof AdminProductInputKind];
+
+
+export const AdminProductInputKind = {
+  daw: 'daw',
+  plugin: 'plugin',
+  tool: 'tool',
+} as const;
+
+export type AdminProductInputStatus = typeof AdminProductInputStatus[keyof typeof AdminProductInputStatus];
+
+
+export const AdminProductInputStatus = {
+  coming_soon: 'coming_soon',
+  available: 'available',
+  discontinued: 'discontinued',
+} as const;
+
+export interface AdminProductInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     * @pattern ^[a-z0-9]+(?:-[a-z0-9]+)*$
+     */
+  slug: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 280
+     */
+  shortDescription: string;
+  /**
+     * @minLength 1
+     * @maxLength 12000
+     */
+  description: string;
+  category: AdminProductInputCategory;
+  kind: AdminProductInputKind;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceCents: number | null;
+  /** @pattern ^[A-Z]{3}$ */
+  currency: string;
+  status: AdminProductInputStatus;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  version: string | null;
+  /** @items.maxLength 60 */
+  featureTags: string[];
+  /** @nullable */
+  coverImageUrl: string | null;
+  isPublished: boolean;
+}
+
 export type ArticleCategory = typeof ArticleCategory[keyof typeof ArticleCategory];
 
 

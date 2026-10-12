@@ -1,7 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  CreateAdminProductBody,
+  CreateAdminProductResponse,
   ListAdminProductsResponse,
   UpdateAdminProductParams,
   UpdateAdminProductBody,
@@ -18,7 +20,7 @@ function claimEmail(claims: unknown): string | null {
   return typeof email === "string" && email.trim() ? email.trim() : null;
 }
 
-async function requireAdmin(req: Parameters<Parameters<IRouter["get"]>[1]>[0], res: Parameters<Parameters<IRouter["get"]>[1]>[1]) {
+async function requireAdmin(req: Request, res: Response): Promise<boolean> {
   const auth = getAuth(req);
   if (!auth.userId) {
     res.status(401).json({ error: "Authentication required" });
@@ -56,12 +58,52 @@ router.get("/admin/products", async (req, res): Promise<void> => {
   res.json(ListAdminProductsResponse.parse(products));
 });
 
+router.post("/admin/products", async (req, res): Promise<void> => {
+  if (!(await requireAdmin(req, res))) return;
+  const body = CreateAdminProductBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  if (body.data.status === "available" && body.data.priceCents === null) {
+    res.status(400).json({ error: "An available product must have a configured price." });
+    return;
+  }
+  const [existing] = await db
+    .select({ id: productsTable.id })
+    .from(productsTable)
+    .where(eq(productsTable.slug, body.data.slug))
+    .limit(1);
+  if (existing) {
+    res.status(409).json({ error: "A product with that slug already exists." });
+    return;
+  }
+  const [created] = await db.insert(productsTable).values(body.data).returning({
+    id: productsTable.id,
+    slug: productsTable.slug,
+    name: productsTable.name,
+    shortDescription: productsTable.shortDescription,
+    description: productsTable.description,
+    category: productsTable.category,
+    kind: productsTable.kind,
+    priceCents: productsTable.priceCents,
+    currency: productsTable.currency,
+    status: productsTable.status,
+    version: productsTable.version,
+    featureTags: productsTable.featureTags,
+    coverImageUrl: productsTable.coverImageUrl,
+    isPublished: productsTable.isPublished,
+  });
+  res.status(201).json(CreateAdminProductResponse.parse(created));
+});
+
 router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   if (!(await requireAdmin(req, res))) return;
   const params = UpdateAdminProductParams.safeParse(req.params);
   const body = UpdateAdminProductBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    res.status(400).json({ error: params.success ? body.error.message : params.error.message });
+    const error = !params.success ? params.error.message : !body.success ? body.error.message : "Invalid request";
+    res.status(400).json({ error });
     return;
   }
 
@@ -85,7 +127,7 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(productsTable)
     .set({ ...body.data, updatedAt: new Date() })
-    .where(and(eq(productsTable.id, params.data.id)))
+    .where(eq(productsTable.id, params.data.id))
     .returning({
       id: productsTable.id,
       slug: productsTable.slug,

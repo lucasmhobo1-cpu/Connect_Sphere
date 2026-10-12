@@ -11,10 +11,11 @@ import { ensureLocalUser } from "./account";
 
 const router: IRouter = Router();
 
-function safeDownloadUrl(value: string | null): value is string {
-  if (!value) return false;
+function safeDownloadUrl(value: string | null, fileSizeBytes: number | null): value is string {
+  if (!value || fileSizeBytes === null || !Number.isSafeInteger(fileSizeBytes) || fileSizeBytes <= 0) return false;
   try {
-    return new URL(value).protocol === "https:";
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
   } catch {
     return false;
   }
@@ -54,8 +55,8 @@ router.get("/releases", async (req, res): Promise<void> => {
       rows.map(({ fileUrl, ...release }) => ({
         ...release,
         publishedAt: release.publishedAt,
-        downloadAvailable: safeDownloadUrl(fileUrl),
-        downloadUrl: safeDownloadUrl(fileUrl)
+        downloadAvailable: safeDownloadUrl(fileUrl, release.fileSizeBytes),
+        downloadUrl: safeDownloadUrl(fileUrl, release.fileSizeBytes)
           ? `/api/releases/${release.id}/download`
           : null,
       })),
@@ -73,6 +74,7 @@ router.get("/releases/:id/download", async (req, res): Promise<void> => {
     .select({
       id: releasesTable.id,
       fileUrl: releasesTable.fileUrl,
+      fileSizeBytes: releasesTable.fileSizeBytes,
       publishedAt: releasesTable.publishedAt,
     })
     .from(releasesTable)
@@ -86,7 +88,7 @@ router.get("/releases/:id/download", async (req, res): Promise<void> => {
       ),
     )
     .limit(1);
-  if (!release || !safeDownloadUrl(release.fileUrl)) {
+  if (!release || !safeDownloadUrl(release.fileUrl, release.fileSizeBytes)) {
     res.status(404).json({ error: "This release does not have a configured download file." });
     return;
   }
