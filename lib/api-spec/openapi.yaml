@@ -84,6 +84,26 @@ paths:
                 items: { $ref: "#/components/schemas/AdminProduct" }
         "401": { description: Authentication required }
         "403": { description: Administrator role required }
+    post:
+      operationId: createAdminProduct
+      tags: [admin]
+      summary: Create a product catalogue entry
+      description: Requires a signed-in Connect Sphere administrator.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminProductInput" }
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProduct" }
+        "400": { description: Invalid product data }
+        "401": { description: Authentication required }
+        "403": { description: Administrator role required }
+        "409": { description: Product slug already exists }
   /admin/products/{id}:
     patch:
       operationId: updateAdminProduct
@@ -282,6 +302,27 @@ components:
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         status: { type: string, enum: [coming_soon, available, discontinued] }
         isPublished: { type: boolean }
+    AdminProductInput:
+      type: object
+      properties:
+        slug: { type: string, minLength: 2, maxLength: 120, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        shortDescription: { type: string, minLength: 1, maxLength: 280 }
+        description: { type: string, minLength: 1, maxLength: 12000 }
+        category:
+          type: string
+          enum: [daw, instruments, eq, compressors, reverb-delay, saturation, synthesizers, audio-tools]
+        kind: { type: string, enum: [daw, plugin, tool] }
+        priceCents: { type: [integer, "null"], minimum: 0 }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        status: { type: string, enum: [coming_soon, available, discontinued] }
+        version: { type: [string, "null"], maxLength: 40 }
+        featureTags:
+          type: array
+          items: { type: string, maxLength: 60 }
+        coverImageUrl: { type: [string, "null"], format: uri }
+        isPublished: { type: boolean }
+      required: [slug, name, shortDescription, description, category, kind, priceCents, currency, status, version, featureTags, coverImageUrl, isPublished]
     Article:
       type: object
       properties:

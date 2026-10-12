@@ -96,6 +96,69 @@ export const ListAdminProductsResponse = zod.array(ListAdminProductsResponseItem
 
 
 /**
+ * Requires a signed-in Connect Sphere administrator.
+ * @summary Create a product catalogue entry
+ */
+export const createAdminProductBodySlugMin = 2;
+export const createAdminProductBodySlugMax = 120;
+
+
+export const createAdminProductBodySlugRegExp = new RegExp('^[a-z0-9]+(?:-[a-z0-9]+)*$');
+export const createAdminProductBodyNameMax = 160;
+
+export const createAdminProductBodyShortDescriptionMax = 280;
+
+export const createAdminProductBodyDescriptionMax = 12000;
+
+export const createAdminProductBodyPriceCentsMin = 0;
+
+export const createAdminProductBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const createAdminProductBodyVersionMax = 40;
+
+export const createAdminProductBodyFeatureTagsItemMax = 60;
+
+
+
+export const CreateAdminProductBody = zod.object({
+  "slug": zod.string().min(createAdminProductBodySlugMin).max(createAdminProductBodySlugMax).regex(createAdminProductBodySlugRegExp),
+  "name": zod.string().min(1).max(createAdminProductBodyNameMax),
+  "shortDescription": zod.string().min(1).max(createAdminProductBodyShortDescriptionMax),
+  "description": zod.string().min(1).max(createAdminProductBodyDescriptionMax),
+  "category": zod.enum(['daw', 'instruments', 'eq', 'compressors', 'reverb-delay', 'saturation', 'synthesizers', 'audio-tools']),
+  "kind": zod.enum(['daw', 'plugin', 'tool']),
+  "priceCents": zod.number().int().min(createAdminProductBodyPriceCentsMin).nullable(),
+  "currency": zod.string().regex(createAdminProductBodyCurrencyRegExp),
+  "status": zod.enum(['coming_soon', 'available', 'discontinued']),
+  "version": zod.string().max(createAdminProductBodyVersionMax).nullable(),
+  "featureTags": zod.array(zod.string().max(createAdminProductBodyFeatureTagsItemMax)),
+  "coverImageUrl": zod.string().url().nullable(),
+  "isPublished": zod.boolean()
+})
+
+export const createAdminProductResponsePriceCentsMin = 0;
+
+export const createAdminProductResponseCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+
+
+export const CreateAdminProductResponse = zod.object({
+  "id": zod.number().int(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "shortDescription": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "kind": zod.string(),
+  "priceCents": zod.number().int().min(createAdminProductResponsePriceCentsMin).nullable(),
+  "currency": zod.string().regex(createAdminProductResponseCurrencyRegExp),
+  "status": zod.enum(['coming_soon', 'available', 'discontinued']),
+  "version": zod.string().nullable(),
+  "featureTags": zod.array(zod.string()),
+  "coverImageUrl": zod.string().nullable(),
+  "isPublished": zod.boolean()
+})
+
+
+/**
  * Requires a signed-in Connect Sphere administrator. This does not process payment.
  * @summary Update product pricing and publication state
  */

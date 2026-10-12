@@ -23,7 +23,7 @@ router.post("/support-requests", async (req, res): Promise<void> => {
     CreateSupportRequestResponse.parse({
       id: request.id,
       status: request.status,
-      message: "Your support request has been received.",
+       message: "Saved to the site database. Email notifications are not configured.",
     }),
   );
 });
@@ -44,7 +44,7 @@ router.post("/newsletter-subscriptions", async (req, res): Promise<void> => {
   res.status(201).json(
     SubscribeNewsletterResponse.parse({
       subscribed: true,
-      message: "Your email has been added to the Connect Sphere newsletter list.",
+       message: "Signup saved to the site database. Newsletter email delivery is not configured.",
     }),
   );
 });
