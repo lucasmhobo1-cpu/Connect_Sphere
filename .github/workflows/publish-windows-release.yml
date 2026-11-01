@@ -34,11 +34,13 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck Connect Sphere frontend
+      - name: Build shared workspace TypeScript project references and typecheck frontend
         env:
           PORT: '3000'
           BASE_PATH: '/'
-        run: pnpm --filter @workspace/connect-sphere run typecheck
+        run: |
+          pnpm run typecheck:libs
+          pnpm --filter @workspace/connect-sphere run typecheck
 
       - name: Build Connect Sphere production frontend
         env:
