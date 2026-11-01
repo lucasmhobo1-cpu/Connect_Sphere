@@ -1,0 +1,35 @@
+{
+  "appId": "com.huskagent.connectsphere",
+  "productName": "Connect Sphere",
+  "copyright": "Copyright (c) 2026 Huskagent LLC",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "files": [
+    "main.cjs",
+    "public/**/*",
+    "package.json"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "artifactName": "Connect-Sphere-Setup-${version}-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "Connect Sphere",
+    "installerLanguages": [
+      "en_US"
+    ]
+  }
+}
