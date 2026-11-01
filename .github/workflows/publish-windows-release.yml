@@ -13,9 +13,9 @@ permissions:
   contents: write
 
 jobs:
-  windows-release:
-    name: Build Connect Sphere Windows x64 Installer
-    runs-on: windows-latest
+  build-web:
+    name: Typecheck & Build Connect Sphere Web Bundle
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -50,7 +50,33 @@ jobs:
           VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
         run: pnpm --filter @workspace/connect-sphere run build
 
-      - name: Stage desktop-shell assets and version
+      - name: Upload built frontend bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect-sphere-web-dist
+          path: artifacts/connect-sphere/dist/public
+          if-no-files-found: error
+
+  windows-release:
+    name: Package Connect Sphere Windows x64 Installer
+    needs: build-web
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download built frontend bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: connect-sphere-web-dist
+          path: desktop-shell/public
+
+      - name: Prepare desktop-shell version
         id: meta
         shell: pwsh
         run: |
@@ -63,9 +89,6 @@ jobs:
           $tag = "v$ver"
           "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-          if (Test-Path "desktop-shell/public") { Remove-Item -Recurse -Force "desktop-shell/public" }
-          Copy-Item -Recurse "artifacts/connect-sphere/dist/public" "desktop-shell/public"
 
           node -e '
             const fs = require("fs");
