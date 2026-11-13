@@ -1,0 +1,2 @@
+- [Connect Sphere content authenticity](connect-sphere-content-authenticity.md) — show only real, configured product data and assets; do not add sample records or simulated software screens.
+- [Vite dependency prebundle cache](vite-prebundle-cache.md) — after package changes, investigate stale optimized modules only when the running app still loads an older dependency.

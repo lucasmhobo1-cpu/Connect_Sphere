@@ -1,0 +1,193 @@
+name: Build & Publish Connect Sphere Windows Release
+
+on:
+  push:
+    branches:
+      - replit-agent
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-web:
+    name: Typecheck & Build Connect Sphere Web Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm 10
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared workspace TypeScript project references and typecheck frontend
+        env:
+          PORT: '3000'
+          BASE_PATH: '/'
+        run: |
+          pnpm run typecheck:libs
+          pnpm --filter @workspace/connect-sphere run typecheck
+
+      - name: Build Connect Sphere production frontend
+        env:
+          NODE_ENV: 'production'
+          PORT: '3000'
+          BASE_PATH: '/'
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+        run: pnpm --filter @workspace/connect-sphere run build
+
+      - name: Upload built frontend bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect-sphere-web-dist
+          path: artifacts/connect-sphere/dist/public
+          if-no-files-found: error
+
+  windows-release:
+    name: Package Connect Sphere Windows x64 Installer
+    needs: build-web
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download built frontend bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: connect-sphere-web-dist
+          path: desktop-shell/public
+
+      - name: Prepare desktop-shell version
+        id: meta
+        shell: pwsh
+        run: |
+          $refName = "$env:GITHUB_REF_NAME"
+          if ($refName -match '^v(\d+\.\d+\.\d+.*)$') {
+            $ver = $Matches[1]
+          } else {
+            $ver = "1.0.$env:GITHUB_RUN_NUMBER"
+          }
+          $tag = "v$ver"
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+          node -e '
+            const fs = require("fs");
+            const ver = process.argv[1];
+            const pkg = JSON.parse(fs.readFileSync("desktop-shell/package.json", "utf8"));
+            pkg.version = ver;
+            fs.writeFileSync("desktop-shell/package.json", JSON.stringify(pkg, null, 2));
+          ' "$ver"
+
+      - name: Install Electron runtime and package Windows x64 NSIS installer
+        working-directory: desktop-shell
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm install --no-audit --no-fund
+          npx --yes electron-builder@26.18.0 --win nsis --x64 --config electron-builder.json --publish never
+
+      - name: Verify PE installer binary and generate SHA-256 + release manifest
+        id: verify
+        working-directory: desktop-shell
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path "dist-electron" -Filter "*Setup*.exe" | Select-Object -First 1
+          if (-not $exe) {
+            throw "No Windows NSIS Setup .exe produced in desktop-shell/dist-electron/"
+          }
+          if ($exe.Length -lt 10485760) {
+            throw "Installer binary is unexpectedly small ($($exe.Length) bytes)."
+          }
+          $bytes = [System.IO.File]::ReadAllBytes($exe.FullName)
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+            throw "Generated file does not have a valid Windows MZ/PE header."
+          }
+          $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
+          $sha256 = (Get-FileHash -Path $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $ver = "${{ steps.meta.outputs.version }}"
+          $repo = "$env:GITHUB_REPOSITORY"
+          $pkgUrl = "https://github.com/$repo/releases/download/$tag/$($exe.Name)"
+
+          "$sha256  $($exe.Name)" | Set-Content -Path "dist-electron/SHA256SUMS.txt" -Encoding utf8NoBOM
+
+          $manifest = [ordered]@{
+            schemaVersion = 1
+            productId = "connect-sphere"
+            applicationName = "Connect Sphere"
+            owner = "Huskagent LLC"
+            repository = $repo
+            version = $ver
+            tag = $tag
+            os = "windows"
+            architecture = "x64"
+            installerFormat = "nsis-exe"
+            fileName = $exe.Name
+            sizeBytes = $exe.Length
+            sha256 = $sha256
+            authenticodeStatus = "$($sig.Status)"
+            packageUrl = $pkgUrl
+            commitSha = "$env:GITHUB_SHA"
+            publishedAt = (Get-Date).ToUniversalTime().ToString("o")
+          }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path "dist-electron/release-manifest.json" -Encoding utf8NoBOM
+
+          "exe_path=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "exe_name=$($exe.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "sha256=$sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish versioned GitHub Release for Huskagent Windows 4
+        working-directory: desktop-shell
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $ver = "${{ steps.meta.outputs.version }}"
+          $exePath = "${{ steps.verify.outputs.exe_path }}"
+          $exeName = "${{ steps.verify.outputs.exe_name }}"
+          $sha = "${{ steps.verify.outputs.sha256 }}"
+          $notes = @(
+            "## Connect Sphere v$ver (Windows x64)",
+            "",
+            "- **Owner:** Huskagent LLC",
+            "- **Role:** Storefront & LaneuCap DAW Distribution/Licensing Hub",
+            "- **Architecture:** Windows 10/11 x64 (NSIS Installer)",
+            "- **Package:** ``$exeName``",
+            "- **SHA-256:** ``$sha``",
+            "- **Source Commit:** ``$env:GITHUB_SHA``",
+            "",
+            "Discoverable automatically by **Huskagent Windows 4** Settings > Updates."
+          ) -join "`n"
+          $notes | Set-Content -Path "dist-electron/RELEASE_NOTES.md" -Encoding utf8NoBOM
+
+          $exists = $false
+          gh release view "$tag" *> $null
+          if ($LASTEXITCODE -eq 0) { $exists = $true }
+
+          if ($exists) {
+            gh release upload "$tag" "$exePath" "dist-electron/SHA256SUMS.txt" "dist-electron/release-manifest.json" --clobber
+          } else {
+            gh release create "$tag" "$exePath" "dist-electron/SHA256SUMS.txt" "dist-electron/release-manifest.json" --title "Connect Sphere v$ver" --notes-file "dist-electron/RELEASE_NOTES.md"
+          }
